@@ -9,7 +9,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import cross_val_score
 from xgboost import XGBClassifier
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
 
 class ModelOptimizer:
     def __init__(self, df: pd.DataFrame, target: str):
@@ -96,12 +96,13 @@ class ModelOptimizer:
             results.append(scores)
             names.append(name)
 
-        pyplot.boxplot(results, labels=names, showmeans=True)
-        pyplot.show()
+        plt.boxplot(results, labels=names, showmeans=True)
+        plt.savefig("boxplot.pdf", format="pdf", bbox_inches="tight")
+        plt.show()
 
     def get_param_score_list(self, estimator, param_distributions, n):
 
-        random_search = RandomizedSearchCV(estimator=estimator, param_distributions=param_distributions, n_iter=50,
+        random_search = RandomizedSearchCV(estimator=estimator, param_distributions=param_distributions, n_iter=n,
                                            cv=5, n_jobs=-1,
                                            verbose=1, scoring='accuracy', random_state=42)
         random_search.fit(self.x_train, self.y_train)
@@ -111,7 +112,6 @@ class ModelOptimizer:
     def optimilize_model(self, model):
         estimator = self.get_models()[model]
         param_grid = self.get_param_grid()[model]
-        param_list, score_list = self.get_param_score_list(estimator, param_grid, 500)
-        best_model = estimator.set_params(**param_list)
+        param_list, score_list = self.get_param_score_list(estimator, param_grid, 100)
 
-        return best_model
+        return estimator.set_params(**param_list)
