@@ -6,8 +6,9 @@ from scipy.stats import pearsonr
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import log_loss
+import logging
 
-class FeatureAnalysis:
+class FeatureAnalyzer:
     def __init__(self, df: pd.DataFrame, target: str, correlation_threshold: float = 0.2):
         self.df = df
         self.target = target
@@ -127,4 +128,12 @@ class FeatureAnalysis:
         golden_features_df = self.generate_golden_features(golden_feature_part, max_depth=3, sample_size=2500)
         self.df = pd.concat([self.df, golden_features_df], axis=1)
         self.features.extend(list(golden_features_df.columns))
+        if len(high_corr_features) > 0:
+            logging.info(f"Usuwanie kolumn o wysokiej korelacji: {len(high_corr_features)}")
+        if len(low_corr_with_target) > 0:
+            logging.info(f"Usuwanie kolumn o niskiej korelacji ze zmienną objaśnianą: {len(low_corr_with_target)}")
+        logging.info(f"Tworzenie zmiennej golden na podstawie: {golden_feature_part}")
+        logging.info(f"Utworzenie golden features w liczbie: {len(golden_features_df.columns)}")
+        logging.info(f"Końcowa liczba kolumn: {len(self.features)}")
 
+        return self.df, self.features
