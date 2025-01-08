@@ -3,12 +3,11 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import cross_val_score
 from xgboost import XGBClassifier
+from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 
 class ModelOptimizer:
@@ -27,10 +26,9 @@ class ModelOptimizer:
         models = dict()
         models['lr'] = LogisticRegression()
         models['cart'] = DecisionTreeClassifier()
+        models['rf'] =  RandomForestClassifier(random_state=1)
         models['knn'] = KNeighborsClassifier()
         models['xgboost'] = XGBClassifier(random_state=1)
-        models['gboost'] = GradientBoostingClassifier(random_state=1, learning_rate=0.01)
-        models['svm'] = SVC()
         models['bayes'] = GaussianNB()
 
         return models
@@ -49,6 +47,12 @@ class ModelOptimizer:
                 'min_samples_split': [2, 5, 10],
                 'min_samples_leaf': [1, 2, 4]
             },
+            'rf': {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [None, 10, 20, 30, 50],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+            },
             'knn': {
                 'n_neighbors': [3, 5, 7, 9],
                 'weights': ['uniform', 'distance'],
@@ -60,17 +64,6 @@ class ModelOptimizer:
                 'learning_rate': [0.01, 0.1, 0.2],
                 'subsample': [0.5, 0.7, 1.0],
                 'colsample_bytree': [0.5, 0.7, 1.0]
-            },
-            'gboost': {
-                'n_estimators': [50, 100, 200],
-                'learning_rate': [0.01, 0.05, 0.1],
-                'max_depth': [3, 5, 7],
-                'subsample': [0.7, 0.8, 1.0]
-            },
-            'svm': {
-                'C': [0.1, 1, 10, 100],
-                'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],
-                'gamma': ['scale', 'auto']
             },
             'bayes': {
                 'var_smoothing': [1e-9, 1e-8, 1e-7, 1e-6, 1e-5]
@@ -99,8 +92,10 @@ class ModelOptimizer:
         plt.figure(figsize=(12, 8))
         plt.boxplot(results, labels=names, showmeans=True)
         plt.title('Model comparison')
-        plt.savefig("boxplot.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/boxplot.pdf", format="pdf", bbox_inches="tight")
         plt.show()
+
+
 
     def get_param_score_list(self, estimator, param_distributions, n):
 
@@ -111,7 +106,10 @@ class ModelOptimizer:
 
         return random_search.best_params_, random_search.score(self.x_test, self.y_test)
 
-    def optimilize_model(self, model):
+    def optimize_model(self, model):
+
+        assert model in self.get_models().keys(), f'model name should be in {self.get_models().keys()}'
+
         estimator = self.get_models()[model]
         param_grid = self.get_param_grid()[model]
         param_list, score_list = self.get_param_score_list(estimator, param_grid, 100)

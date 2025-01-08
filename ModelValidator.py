@@ -50,11 +50,15 @@ class ModelValidator:
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.legend()
-        plt.savefig("roc_curve.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/roc_curve.pdf", format="pdf", bbox_inches="tight")
         plt.show()
         return model_auc, 2 * model_auc - 1
 
     def get_classification_report(self):
         y_pred = self.model.predict(self.x_test)
         print(classification_report(self.y_test, y_pred, output_dict=True))
+
+    def get_model_summary(self):
+        self.get_classification_report()
+        auc, gini = self.get_roc_plot()
 
