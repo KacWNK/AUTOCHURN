@@ -1,12 +1,14 @@
 import logging
 import matplotlib.pyplot as plt
 from fpdf import FPDF
-from FeatureAnalyzer import FeatureAnalyzer
-from ModelOptimizer import ModelOptimizer
-from ModelValidator import ModelValidator
+from auto_churn.FeatureAnalyzer import FeatureAnalyzer
+from auto_churn.ModelOptimizer import ModelOptimizer
+from auto_churn.ModelValidator import ModelValidator
 from sklearn.metrics import classification_report
 import seaborn as sns
 import pandas as pd
+import os
+
 
 def generate_summary_report(df, target_column, original_df=None, columns_to_drop=None, output_dir="./figures", pipeline=None):
     """
@@ -61,21 +63,16 @@ def generate_summary_report(df, target_column, original_df=None, columns_to_drop
     logging.info("Rozpoczęcie analizy cech.")
     analyzer = FeatureAnalyzer(df, target_column)
 
+    df, high_corr_features, removed_corr_features, feature_importances, golden_features_df = analyzer.extract_best_features()
     logging.info("Korelacja cech z celem.")
-    high_corr_features = analyzer.correlation_with_target()
-
     logging.info("Generowanie macierzy korelacji.")
-    removed_corr_features = analyzer.correlation_matrix()
     logging.info(f"Usunięte cechy o wysokiej korelacji między sobą: {removed_corr_features}")
-
     logging.info("Obliczanie ważności cech.")
-    feature_importances = analyzer.feature_importance()
     logging.info(f"Ważności cech:\n{feature_importances}")
-
-
     logging.info("Tworzenie golden features.")
-    golden_features_df = analyzer.generate_golden_features(feature_importances.index[0])
     logging.info(f"Utworzone golden features:\n{golden_features_df.columns.tolist()}")
+
+
 
     # 3. Porównanie modeli za pomocą get_models_candidates
     logging.info("Porównanie modeli za pomocą funkcji get_models_candidates.")
@@ -129,6 +126,7 @@ def generate_summary_report(df, target_column, original_df=None, columns_to_drop
         "cart": "Drzewo Decyzyjne",
         "knn": "K-Najblizszych Sasiadow",
         "xgboost": "XGBoost",
+        "bayes": "Bayes"
         
     }
     best_model_name = model_names[best_model]
@@ -370,4 +368,13 @@ def generate_summary_report(df, target_column, original_df=None, columns_to_drop
 
     pdf.output(f"{output_dir}/report_summary.pdf")
 
-    logging.info(f"Raport został zapisany jako {output_dir}/report_summary.pdf.")
+    if os.path.exists(output_dir) and os.path.isdir(output_dir):
+        for file_name in os.listdir(output_dir):
+            if file_name.endswith(".png"):
+                file_path = os.path.join(output_dir, file_name)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Nie udało się usunąć pliku {file_path}: {e}")
+
+

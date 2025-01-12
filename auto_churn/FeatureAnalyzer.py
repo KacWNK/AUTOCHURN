@@ -9,21 +9,23 @@ from sklearn.metrics import log_loss
 import logging
 
 class FeatureAnalyzer:
-    def __init__(self, df: pd.DataFrame, target: str, correlation_threshold: float = 0.2):
+    def __init__(self, df: pd.DataFrame, target: str, correlation_threshold: float = 0.8, corr_with_target: float = 0.001):
         self.df = df
         self.target = target
         self.correlation_threshold = correlation_threshold
+        self.corr_with_target = corr_with_target
         self.features = [col for col in df.columns if col != target]
 
-    def correlation_with_target(self, corr_level=0.1):
+    def correlation_with_target(self):
 
         insignificant_features = []
 
         for col in self.features:
             corr, p_value = pearsonr(self.df[col], self.df[self.target])
+            corr_abs = abs(corr)
             insignificant_features.append({
                 'feature': col,
-                'correlation': corr,
+                'correlation': corr_abs,
                 'p-value': p_value
             })
 
@@ -31,18 +33,16 @@ class FeatureAnalyzer:
         correlation_df = correlation_df.sort_values(by = 'correlation', ascending=False)
         plt.figure(figsize=(10, 6))
         sns.barplot(x=correlation_df.feature, y=correlation_df.correlation)
-        plt.title(f'Correlation with {self.target}')
+        plt.title(f'ABS Correlation with {self.target}')
         plt.xticks(rotation=90)
         plt.savefig("./figures/correlation_with_target.png", bbox_inches="tight")
         plt.show()
-
-        return list(correlation_df[correlation_df['correlation'] >= corr_level]['feature'])
+        return list(correlation_df[correlation_df['correlation'] < self.corr_with_target]['feature'])
 
     def correlation_matrix(self):
 
         correlation = self.df[self.features].corr()
         corr_above_threshold = correlation[(correlation.abs() > self.correlation_threshold) & (correlation.abs() < 1)]
-
         plt.figure(figsize=(12, 8))
         sns.heatmap(correlation, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
         plt.title('Correlation Matrix')
@@ -51,10 +51,9 @@ class FeatureAnalyzer:
 
         to_remove = set()
         for col in corr_above_threshold.columns:
-            correlated_features = corr_above_threshold.index[corr_above_threshold[col].notnull()].tolist()
+            correlated_features = corr_above_threshold.index[corr_above_threshold[col].notnull()].tolist() + [col]
             if correlated_features:
-                to_remove.update(correlated_features[1:])
-
+                to_remove.update(sorted(correlated_features[1:]))
         return list(to_remove)
 
     def feature_importance(self):
@@ -70,6 +69,7 @@ class FeatureAnalyzer:
         plt.figure(figsize=(10, 6))
         sns.barplot(x=feature_importances.index, y=feature_importances.values)
         plt.title('Feature Importance')
+        plt.xlabel('Feature')
         plt.xticks(rotation=90)
         plt.savefig("./figures/feature_importance.png", bbox_inches="tight")
         plt.show()
@@ -136,4 +136,4 @@ class FeatureAnalyzer:
         logging.info(f"Utworzenie golden features w liczbie: {len(golden_features_df.columns)}")
         logging.info(f"Końcowa liczba kolumn: {len(self.features)}")
 
-        return self.df, self.features
+        return self.df, high_corr_features, low_corr_with_target, feature_importance, golden_features_df
