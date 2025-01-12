@@ -33,7 +33,7 @@ class FeatureAnalyzer:
         sns.barplot(x=correlation_df.feature, y=correlation_df.correlation)
         plt.title(f'Correlation with {self.target}')
         plt.xticks(rotation=90)
-        plt.savefig("./figures/correlation_with_target.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/correlation_with_target.png", bbox_inches="tight")
         plt.show()
 
         return list(correlation_df[correlation_df['correlation'] >= corr_level]['feature'])
@@ -46,7 +46,7 @@ class FeatureAnalyzer:
         plt.figure(figsize=(12, 8))
         sns.heatmap(correlation, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
         plt.title('Correlation Matrix')
-        plt.savefig("./figures/correlation_matrix.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/correlation_matrix.png", bbox_inches="tight")
         plt.show()
 
         to_remove = set()
@@ -71,7 +71,7 @@ class FeatureAnalyzer:
         sns.barplot(x=feature_importances.index, y=feature_importances.values)
         plt.title('Feature Importance')
         plt.xticks(rotation=90)
-        plt.savefig("./figures/feature_importance.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/feature_importance.png", bbox_inches="tight")
         plt.show()
 
         return feature_importances

@@ -92,7 +92,7 @@ class ModelOptimizer:
         plt.figure(figsize=(12, 8))
         plt.boxplot(results, labels=names, showmeans=True)
         plt.title('Model comparison')
-        plt.savefig("./figures/boxplot.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/boxplot.png", bbox_inches="tight")
         plt.show()
 
 

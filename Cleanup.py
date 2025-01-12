@@ -75,6 +75,8 @@ def preprocessing_pipeline(df, target_column, columns_to_drop=None, ordinal_colu
         pd.DataFrame: Przetworzony zbiór danych.
     """
     logging.info("Rozpoczęcie tworzenia pipeline'u przetwarzania danych.")
+    logging.info(f"Początkowy kształt danych: {df.shape}")
+    initial_columns = df.shape[1]-1
 
     # Usunięcie kolumn, które nie są potrzebne do modelowania
     if columns_to_drop:
@@ -170,19 +172,23 @@ def preprocessing_pipeline(df, target_column, columns_to_drop=None, ordinal_colu
                              get_feature_names_out(categorical_features)) + \
                         ordinal_columns + binary_columns
 
-    if date_columns:
-        for col in date_columns:
-            processed_columns.extend([f"{col}_year", f"{col}_month", f"{col}_day", f"{col}_weekday"])
-
-    logging.info(f"Liczba kolumn po przetwarzaniu: {processed_data.shape[1]}")
+    logging.info(f"Liczba kolumn po przetwarzaniu: {processed_data.shape[1]} (bez kolumny docelowej).")
     logging.info(f"Kolumny po przetwarzaniu: {processed_columns}")
+    added_columns = len(processed_columns) - len(X.columns)
+    removed_columns = len(columns_to_drop) if columns_to_drop else 0
+    logging.info(f"Liczba stworzonych kolumn: {added_columns}, liczba usuniętych kolumn: {removed_columns}, różnica w liczbie kolumn: {len(processed_columns) - initial_columns}")
+
     if processed_data.shape[0] < df.shape[0]:
         logging.warning(f"Liczba wierszy zmniejszona z {df.shape[0]} do {processed_data.shape[0]} "
                         f"(usunięto {df.shape[0] - processed_data.shape[0]} wierszy).")
     else:
         logging.info("Liczba wierszy pozostała bez zmian.")
-    logging.info("Pipeline przetwarzania danych został pomyślnie utworzony.")
 
-    return pipeline, pd.DataFrame(processed_data, columns=processed_columns)
+    final_df = pd.DataFrame(processed_data, columns=processed_columns)
+    final_df[target_column] = y.loc[final_df.index].values
+    logging.info("Pipeline przetwarzania danych został pomyślnie utworzony.")
+    logging.info(f"Kształt przetworzonych danych: {final_df.shape}")
+
+    return pipeline, final_df
 
 

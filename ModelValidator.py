@@ -50,7 +50,7 @@ class ModelValidator:
         plt.xlabel('False Positive Rate')
         plt.ylabel('True Positive Rate')
         plt.legend()
-        plt.savefig("./figures/roc_curve.pdf", format="pdf", bbox_inches="tight")
+        plt.savefig("./figures/roc_curve.png", bbox_inches="tight")
         plt.show()
         return model_auc, 2 * model_auc - 1
 
