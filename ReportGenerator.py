@@ -6,8 +6,9 @@ from ModelOptimizer import ModelOptimizer
 from ModelValidator import ModelValidator
 from sklearn.metrics import classification_report
 import seaborn as sns
+import pandas as pd
 
-def generate_summary_report(df, target_column, output_dir="./figures"):
+def generate_summary_report(df, target_column, original_df=None, columns_to_drop=None, output_dir="./figures", pipeline=None):
     """
     Funkcja generuje raport podsumowujący cały proces analizy, optymalizacji i walidacji modelu.
 
@@ -20,20 +21,25 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
         None
     """
     logging.info("Rozpoczęcie generowania raportu.")
-
+    if original_df.empty:
+        original_df = df
+    if columns_to_drop is not None:
+        original_df = original_df.drop(columns=columns_to_drop, errors='ignore')
+    
     # 1. Eksploracyjna Analiza Danych (EDA)
+
     logging.info("Eksploracyjna analiza danych (EDA).")
-    eda_summary = df.describe(include='all')
+    eda_summary = original_df.describe(include='all')
     logging.info(f"Podstawowe statystyki danych:\n{eda_summary}")
-    numeric_features = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_features = df.select_dtypes(include=['object', 'category']).columns.tolist()
+    numeric_features = original_df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    categorical_features = original_df.select_dtypes(include=['object', 'category']).columns.tolist()
 
     # Histogramy dla cech numerycznych
     hist_paths = []
     for col in numeric_features:
         hist_path = f"{output_dir}/hist_{col}.png"
         plt.figure(figsize=(10, 6))
-        sns.histplot(df[col].dropna(), kde=True, bins=30, color='blue')
+        sns.histplot(original_df[col].dropna(), kde=True, bins=30, color='blue')
         plt.title(f"Rozkład cechy: {col}")
         plt.savefig(hist_path, format='png')
         plt.close()
@@ -44,7 +50,7 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
     for col in categorical_features:
         bar_path = f"{output_dir}/bar_{col}.png"
         plt.figure(figsize=(10, 6))
-        df[col].value_counts().plot(kind='bar', color='orange')
+        original_df[col].value_counts().plot(kind='bar', color='orange')
         plt.title(f"Rozkład cechy kategorycznej: {col}")
         plt.ylabel("Liczność")
         plt.savefig(bar_path, format='png')
@@ -126,9 +132,37 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
         
     }
     best_model_name = model_names[best_model]
+    # Odwracanie Skalowania do oryginalnych wartości
+    probabilities = validator.model.predict_proba(validator.x_test)[:, 1]  
+    top_n=100  
+    top_n_probabilities = probabilities.argsort()[-top_n:][::-1]
+    high_prob_customers = validator.x_test.iloc[top_n_probabilities]
+    preprocessor = pipeline.named_steps['preprocessor']  
+    numeric_transformer = preprocessor.named_transformers_['num']
+    if hasattr(numeric_transformer.named_steps['scaler'], 'inverse_transform'):
+        rescaled_high_prob = high_prob_customers.copy()
+        numeric_features = numeric_transformer.feature_names_in_
+        rescaled_high_prob[numeric_features] = numeric_transformer.named_steps['scaler'].inverse_transform(
+            high_prob_customers[numeric_features]
+        )
+    else:
+        rescaled_high_prob = high_prob_customers
 
+    high_prob_profile = rescaled_high_prob.mean().to_frame("Predicted High Probability (Target=1)")
+    high_prob_profile["Feature"] = high_prob_profile.index
 
-    # 5. Tworzenie PDF z raportem
+    rescaled_x_test = validator.x_test.copy()
+    if hasattr(numeric_transformer.named_steps['scaler'], 'inverse_transform'):
+        rescaled_x_test[numeric_features] = numeric_transformer.named_steps['scaler'].inverse_transform(
+            validator.x_test[numeric_features]
+        )
+    
+    overall_profile = rescaled_x_test.mean().to_frame("Overall Average")
+    overall_profile["Feature"] = overall_profile.index
+
+    profile_summary = pd.merge(overall_profile, high_prob_profile, on="Feature", how="outer")
+
+    #  Tworzenie PDF z raportem
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", style='B', size=16)
@@ -160,8 +194,8 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
     pdf.cell(first_table_col_widths[1], 10, f"{gini:.4f}", border=1, align='C')
     pdf.ln(20)
     
-    pdf.set_font("Arial", style='B', size=12)
-    pdf.cell(0, 10, "Raport klasyfikacji:", ln=True, align='C')
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Raport klasyfikacji", ln=True, align='C')
     pdf.set_font("Arial", size=10)
 
     line_height = pdf.font_size * 1.5
@@ -175,36 +209,99 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
         for idx, cell in enumerate(row):
             pdf.cell(col_widths[idx], line_height, cell, border=1, align='C')
         pdf.ln(line_height)
-    ##############################################################################################################
+
     pdf.ln(20)
     pdf.set_font("Arial", style='B', size=12)
-    pdf.cell(0, 10, "Statystyki opisowe:", ln=True, align='C')
+    pdf.cell(0, 10, "Statystyki opisowe danych", ln=True, align='C')
     pdf.set_font("Arial", size=10)
 
     desc = eda_summary.round(2).transpose()
     line_height = pdf.font_size * 1.5
     col_widths = [40] + [20] * (len(desc.columns))  # Szerokość kolumn
+    total_table_width = 180
+    start_x_third_table = (pdf.w - total_table_width) / 2  
+
 
     # Dodanie nagłówków
-    desc=desc.drop(columns='count')
+    desc=desc.drop(columns=['count', 'unique', 'top', 'freq'])
     pdf.set_font("Arial", style='B', size=10)
     headers = ["Feature"] + list(desc.columns)
+    pdf.set_x(start_x_third_table)
+    pdf.set_fill_color(200, 220, 255)
     for i, header in enumerate(headers):
-        pdf.cell(col_widths[i], line_height, header, border=1, align='C')
+        pdf.cell(col_widths[i], line_height, header, border=1, align='C', fill=True)
     pdf.ln(line_height)
 
     # Dodanie wierszy z wartościami
     pdf.set_font("Arial", size=10)
     for feature, values in desc.iterrows():
-        pdf.cell(col_widths[0], line_height, feature, border=1, align='C')  # Nazwa cechy
+        pdf.set_x(start_x_third_table)
+        pdf.cell(col_widths[0], line_height, feature, border=1, align='C', fill=True)  
         for i, value in enumerate(values):
             pdf.cell(col_widths[i + 1], line_height, str(value), border=1, align='C')
         pdf.ln(line_height)
+    
+    ##############################################################################################################
+    pdf.add_page()
+    pdf.set_font("Arial", style='B', size=12)
+    pdf.cell(0, 10, "Profil Klienta na Podstawie Predykcji Modelu", ln=True, align='C')
+
+    top_features = feature_importances.head(3).index.tolist() 
+    def set_fill_color(pdf, feature_name, top_features):
+        if feature_name in top_features:
+            pdf.set_fill_color(10, 200, 10)
+        else:
+            pdf.set_fill_color(200, 220, 255)
+    def set_fill_color_2(pdf, feature_name, top_features):
+        if feature_name in top_features:
+            pdf.set_fill_color(10, 200, 10)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+
+
+    # Szerokość tabeli
+    table_width = 60 + 60 + 80  
+
+    # Wyśrodkowanie tabeli
+    x_start = (pdf.w - table_width) / 2  
+
+    # Początkowa pozycja
+    pdf.set_x(x_start)
+
+    # Nagłówki tabeli
+    pdf.set_fill_color(200, 220, 255)
+    pdf.set_font("Arial", style='B', size=10)
+    pdf.cell(60, 10, "Feature", border=1, align='C', fill=True)  
+    pdf.cell(60, 10, "Overall Average", border=1, align='C', fill=True)  
+    pdf.cell(80, 10, "Predicted High Probability (Target=1)", border=1, align='C', fill=True)  
+    pdf.ln(10)
+
+    # Dodanie danych z wypełnionymi komórkami
+    pdf.set_font("Arial", size=10)
+    for _, row in profile_summary.iterrows():
+        pdf.set_x(x_start)
+        set_fill_color(pdf, row["Feature"], top_features)
+        pdf.cell(60, 10, row["Feature"], border=1, align='C', fill=True)  
+        set_fill_color_2(pdf, row["Feature"], top_features)
+        pdf.cell(60, 10, f"{row['Overall Average']:.2f}", border=1, align='C', fill=True)
+        pdf.cell(80, 10, f"{row['Predicted High Probability (Target=1)']:.2f}", border=1, align='C', fill=True)
+        pdf.ln(10)
+    pdf.set_font("Arial", size=10)
+    pdf.ln(10)  # Dodanie odstępu przed objaśnieniem
+    pdf.multi_cell(0, 10, 
+    "Tabela przedstawia znaczenie cech modelu wykorzystywanego do predykcji profilu klienta.\n "
+    "1. Feature (Cecha): Nazwa cechy.\n"
+    "2. Overall Average (Srednia Ogolna): Srednia wartosc cechy dla wszystkich klientow.\n"
+    "3. Predicted High Probability (Target=1) (Przewidywana Wysoka Prawdopodobienstwo dla Target=1):" 
+        "Przewidywane prawdopodobienstwo, ze zmienna docelowa wynosi 1 dla danej cechy.\n\n"
+
+        "Wiersze z 3 najwazniejszymi cechami sa podswietlone na zielono."
+    )
     ##############################################################################################################
     # EDA
     pdf.add_page()
-    pdf.set_font("Arial", style='B', size=12)
-    pdf.cell(0, 10, "Eksploracyjna analiza danych:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Wizualizacja rozkladu danych", ln=True, align='C')
 
     images = hist_paths + bar_paths
     images_per_row = 3
@@ -214,12 +311,16 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
     img_height = 40
 
     for i, img_path in enumerate(images):
-        if i % images_per_row == 0 and i != 0:
-            y_offset += img_height + 10
-            x_offset = 10
         pdf.image(img_path, x=x_offset, y=y_offset, w=img_width, h=img_height)
         x_offset += img_width + 10
-        if y_offset + img_height + 10 > 270:  # Nowa strona, jeśli brak miejsca
+
+        # Przejscie do nowego wiersza
+        if (i + 1) % images_per_row == 0:
+            y_offset += img_height + 10
+            x_offset = 10
+
+        # Nowa strona po osiagnieciu dolnego marginesu
+        if y_offset + img_height + 10 > 290 and (i + 1) % images_per_row == 0 and i != len(images) - 1:
             pdf.add_page()
             y_offset = 30
             x_offset = 10
@@ -228,32 +329,44 @@ def generate_summary_report(df, target_column, output_dir="./figures"):
     ##############################################################################################################
     # Wykresy z analizy
     pdf.add_page()
-    pdf.cell(0, 10, "Korelacja cech z celem:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Korelacja cech z celem", ln=True, align='C')
     pdf.image("./figures/correlation_with_target.png", x=10, y=20, w=180)
     pdf.ln(150)
+    pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, f"Wnioski: Wykres pokazuje, ktore cechy sa skorelowane z celem. Wartosci bliskie 1 oznaczaja silna korelacje dodatnia, a bliskie -1 silna korelacje ujemna. Cechy o wysokiej korelacji z celem moga byc kluczowe w modelowaniu. Wartosci ponizej 0.1 sa zazwyczaj uznawane za niskie i nieistotne. Najwyzsza korelacje z celem mialy cechy: {high_corr_features}.")
 
     pdf.add_page()
-    pdf.cell(0, 10, "Macierz korelacji cech:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Macierz korelacji cech", ln=True, align='C')
     pdf.image("./figures/correlation_matrix.png", x=10, y=20, w=180)
     pdf.ln(150)
+    pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, f"Wnioski: Wykres pokazuje, ktore cechy sa ze soba skorelowane. W wyniku analizy usunieto cechy o wysokiej korelacji miedzy soba: {removed_corr_features}.")
 
     pdf.add_page()
-    pdf.cell(0, 10, "Waznosc cech:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Waznosc cech", ln=True, align='C')
     pdf.image("./figures/feature_importance.png", x=10, y=20, w=180)
     pdf.ln(150)
+    pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, "Wnioski: Wykres pokazuje, ktore cechy mialy najwiekszy wplyw na predykcje modelu. Mozna je rozwazyc jako kluczowe w dalszych analizach.")
 
     pdf.add_page()
-    pdf.cell(0, 10, "Porownanie modeli:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Porownanie modeli", ln=True, align='C')
     pdf.image('./figures/boxplot.png', x=10, y=20, w=180)
     pdf.ln(150)
+    pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, f"Wnioski: Wykres przedstawia porownanie roznych modeli pod wzgledem ich skutecznosci. Widac, ze model '{best_model}' osiagnal najwyzsze wyniki w walidacji. Z wynikiem {model_scores[best_model]:.4f} jest to najlepszy model do dalszych analiz.")
 
     pdf.add_page()
-    pdf.cell(0, 10, "Krzywa ROC:", ln=True)
+    pdf.set_font("Arial", style='B', size=14)
+    pdf.cell(0, 10, "Krzywa ROC", ln=True, align='C')
     pdf.image("./figures/roc_curve.png", x=10, y=20, w=180)
+    pdf.ln(150)
+    pdf.set_font("Arial", size=10)
+    pdf.multi_cell(0, 10, f"Wnioski: Wykres przedstawia krzywa ROC dla najlepszego modelu '{best_model}'. Im wyzsza powierzchnia pod krzywa (AUC), tym lepszy model. W tym przypadku AUC wynosi {auc:.4f}.")
 
     pdf.output(f"{output_dir}/report_summary.pdf")
 
