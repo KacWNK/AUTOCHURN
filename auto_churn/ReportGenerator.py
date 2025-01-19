@@ -330,7 +330,7 @@ def generate_summary_report(df, target_column, original_df=None, columns_to_drop
     pdf.set_font("Arial", style='B', size=14)
     pdf.cell(0, 10, "Korelacja cech z celem", ln=True, align='C')
     pdf.image("./figures/correlation_with_target.png", x=10, y=20, w=180)
-    pdf.ln(150)
+    pdf.ln(200)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, f"Wnioski: Wykres pokazuje, ktore cechy sa skorelowane z celem. Wartosci bliskie 1 oznaczaja silna korelacje dodatnia, a bliskie -1 silna korelacje ujemna. Cechy o wysokiej korelacji z celem moga byc kluczowe w modelowaniu. Wartosci ponizej 0.1 sa zazwyczaj uznawane za niskie i nieistotne. Najwyzsza korelacje z celem mialy cechy: {high_corr_features}.")
 
@@ -346,7 +346,7 @@ def generate_summary_report(df, target_column, original_df=None, columns_to_drop
     pdf.set_font("Arial", style='B', size=14)
     pdf.cell(0, 10, "Waznosc cech", ln=True, align='C')
     pdf.image("./figures/feature_importance.png", x=10, y=20, w=180)
-    pdf.ln(150)
+    pdf.ln(190)
     pdf.set_font("Arial", size=10)
     pdf.multi_cell(0, 10, "Wnioski: Wykres pokazuje, ktore cechy mialy najwiekszy wplyw na predykcje modelu. Mozna je rozwazyc jako kluczowe w dalszych analizach.")
 
